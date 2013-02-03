@@ -18,6 +18,7 @@ module CollectionFilter
           :id     => options[:as] || [options[:namespace], dom_class(object)].compact.join("_").presence,
           :method => :get
         )
+        options[:builder] ||= CollectionFilter::Helpers::FormBuilder
         form_for(record, options, &proc)
       end
 
@@ -39,6 +40,33 @@ module CollectionFilter
         else
           tag_name_without_filter
         end
+      end
+    end
+
+    class FormBuilder < ActionView::Helpers::FormBuilder
+      def button(value=nil, options={})
+        value, options = nil, value if value.is_a?(Hash)
+        options[:name] ||= nil
+        super
+      end
+
+      private
+      def submit_default_value
+        object = convert_to_model(@object)
+        key    = :submit
+
+        model = if object.class.respond_to?(:model_name)
+          object.class.model_name.human
+        else
+          @object_name.to_s.humanize
+        end
+
+        defaults = []
+        defaults << :"helpers.submit.#{object_name}.#{key}"
+        defaults << :"helpers.submit.#{key}"
+        defaults << "#{key.to_s.humanize} #{model}"
+
+        I18n.t(defaults.shift, :model => model, :default => defaults)
       end
     end
   end
