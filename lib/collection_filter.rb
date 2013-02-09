@@ -134,10 +134,11 @@ module CollectionFilter
   module ParametersExt
     def default(hash = nil)
       return super unless hash.is_a?(Hash)
-      hash.each do |key, value|
-        self[key] = self[key].presence || value
+      params = self.class.new(hash)
+      self.each do |key, value|
+        params[key] = value if value.present?
       end
-      self
+      params
     end
   end
 
