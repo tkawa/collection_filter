@@ -1,31 +1,40 @@
 require "collection_filter/version"
+require "ostruct"
 
 module CollectionFilter
   module Helpers
     module FormHelper
-      def filter_form_for(record, options = {}, &proc)
-        object = record.is_a?(Array) ? record.last : record
-        object = convert_to_model(object)
-        object.instance_variable_set(:@_filter_form, true)
-        url_for_record = Array.wrap(record).map {|o|
-          class_name = o.class.to_s
-          class_name.end_with?('Filter') ? class_name.sub(/Filter$/, '').underscore.pluralize.to_sym : o
-        }
-        options[:url] ||= polymorphic_path(url_for_record)
+      def filter_form_for(filter = nil, options = {}, &proc)
+        @filter_object ||= CollectionFilter::SimpleFilter.new(filter || _filter_params, controller_name)
+        options[:url] ||= polymorphic_path(@filter_object._record_name)
         options[:html] ||= {}
         options[:html].reverse_merge!(
-          :class  => options[:as] || dom_class(object),
-          :id     => options[:as] || [options[:namespace], dom_class(object)].compact.join("_").presence,
+          :class  => options[:as] || @filter_object._name,
+          :id     => options[:as] || [options[:namespace], @filter_object._name].compact.join("_").presence,
           :method => :get
         )
+        options[:as] ||= @filter_object._name
         options[:builder] ||= CollectionFilter::Helpers::FormBuilder
-        form_for(record, options, &proc)
+        form_for(@filter_object, options, &proc)
       end
 
-      #def filter_fields_for(record_name, record_object = nil, options = {}, &block)
-      #  object.instance_variable_set(:@_filter_form, true)
-      #  fields_for(record_name, record_object, options, &block)
-      #end
+      def filter_form(options = {}, &proc)
+        filter_form_for(nil, options, &proc)
+      end
+
+      def filter_fields_for(filter = nil, options = {}, &block)
+        @filter_object ||= CollectionFilter::SimpleFilter.new(filter || _filter_params, controller_name)
+        fields_for(@filter_object._name, @filter_object, options, &block)
+      end
+
+      def filter_fields(options = {}, &block)
+        filter_fields_for(nil, options, &block)
+      end
+
+      private
+      def _filter_params
+        respond_to?(:filter_params) ? filter_params : params
+      end
     end
 
     module InstanceTagExt
@@ -88,11 +97,61 @@ module CollectionFilter
     end
   end
 
+  class SimpleFilter < OpenStruct
+    alias :initialize_for_open_struct :initialize
+    include CollectionFilter::Filter
+
+    def initialize(params, controller_name)
+      if params.is_a?(Hash)
+        initialize_for_open_struct(params)
+      else
+        initialize_for_open_struct
+        @_delegate_object = params
+      end
+      @_controller_name = controller_name.to_s
+      @_filter_form = true
+    end
+
+    def _record_name
+      @_controller_name.sub(/Controller$/, '').underscore.to_sym
+    end
+
+    def _name
+      @_delegate_object ? @_delegate_object.class.to_s.underscore.to_sym : "#{_record_name}_filter"
+    end
+
+    def method_missing(name, *args)
+      super
+    rescue NameError
+      @_delegate_object.send(name, *args)
+    end
+
+    def respond_to_missing?(symbol, include_private)
+      super || @_delegate_object.respond_to_missing?(symbol, include_private)
+    end
+  end
+
+  module ParametersExt
+    def default(hash = nil)
+      return super unless hash.is_a?(Hash)
+      hash.each do |key, value|
+        self[key] = self[key].presence || value
+      end
+      self
+    end
+  end
+
   class Railtie < Rails::Railtie
     initializer 'collection_filter' do
       ActiveSupport.on_load :action_view do
         ActionView::Base.send :include, CollectionFilter::Helpers::FormHelper
         ActionView::Helpers::InstanceTag.send :include, CollectionFilter::Helpers::InstanceTagExt
+      end
+
+      ActiveSupport.on_load :action_controller do
+        if defined? ActionController::Parameters
+          ActionController::Parameters.send :include, CollectionFilter::ParametersExt
+        end
       end
     end
   end
