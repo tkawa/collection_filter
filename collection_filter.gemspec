@@ -18,5 +18,5 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
 
   gem.add_dependency 'railties', '~> 3.1'
-  gem.add_dependency 'activerecord', '~> 3.1'
+  #gem.add_dependency 'strong_parameters' # if using Rails 3
 end
