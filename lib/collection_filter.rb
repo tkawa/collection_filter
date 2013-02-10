@@ -47,17 +47,43 @@ module CollectionFilter
     end
 
     module InstanceTagExt
-      def self.included(base)
-        base.send :alias_method_chain, :tag_name, :filter
+      extend ActiveSupport::Concern
+
+      included do
+        alias_method_chain :value, :filter
+        alias_method_chain :value_before_type_cast, :filter
+        alias_method_chain :tag_name, :filter
+      end
+
+      def value_with_filter(object)
+        if filter_form?
+          object && object[@method_name]
+        else
+          value_without_filter(object)
+        end
+      end
+
+      def value_before_type_cast_with_filter(object)
+        if filter_form?
+          object &&
+          object[@method_name + "_before_type_cast"] ||
+          object[@method_name]
+        else
+          value_before_type_cast_without_filter(object)
+        end
       end
 
       private
       def tag_name_with_filter
-        if @object.instance_variable_defined?(:@_filter_form) && @object.instance_variable_get(:@_filter_form)
+        if filter_form?
           sanitized_method_name
         else
           tag_name_without_filter
         end
+      end
+
+      def filter_form?
+        @object.instance_variable_defined?(:@_filter_form) && @object.instance_variable_get(:@_filter_form)
       end
     end
 

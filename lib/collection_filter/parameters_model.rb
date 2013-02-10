@@ -10,18 +10,8 @@ module CollectionFilter
       self
     end
 
-    def method_missing(name, *args, &blk)
-      if key?(name) && args.empty? && blk.nil?
-        self[name]
-      elsif match = name.to_s.match(/(.+)=$/)
-        self[match[1]] = args.first
-      else
-        super
-      end
-    end
-
-    def respond_to_missing?(symbol, include_private)
-      key?(symbol) ? true : super
+    def read_attribute_for_validation(key)
+      self[key]
     end
 
     def to_model
